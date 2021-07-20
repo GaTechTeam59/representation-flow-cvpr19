@@ -23,7 +23,7 @@ def video_to_tensor(pic):
 
 class HMDB(data_utl.Dataset):
 
-    def __init__(self, split_file, root, mode='rgb', length=16, model='2d', random=True, c2i={}):
+    def __init__(self, split_file, root, mode='rgb', length=16, model='2d', random=False, c2i={}):
         self.class_to_id = c2i
         self.id_to_class = []
         for i in range(len(c2i.keys())):
@@ -40,6 +40,11 @@ class HMDB(data_utl.Dataset):
                 if len(l) <= 5:
                     continue
                 v,c = l.strip().split(' ')
+                v_out = mode+'_'+v.split('.')[0]+'.mp4'
+                # print(f"v: {v} | v_out: {v_out} | c: {c}")
+                if v_out not in os.listdir("./ssd/hmdb"):
+                    cmd = f"cd ./ssd/hmdb && ffmpeg -i {v} -c:v copy -c:a copy {v_out} && cd .."
+                    os.system(cmd)
                 v = mode+'_'+v.split('.')[0]+'.mp4'
                 if c not in self.class_to_id:
                     self.class_to_id[c] = cid
@@ -74,8 +79,11 @@ class HMDB(data_utl.Dataset):
         else:
             th = self.size
             tw = self.size
-            i = random.randint(0, h - th) if h!=th else 0
-            j = random.randint(0, w - tw) if w!=tw else 0
+            i = random.randint(0, np.maximum(h - th, 0)) if h!=th else 0
+            j = random.randint(0, np.maximum(w - tw, 0)) if w!=tw else 0
+            print(f"h: {h} | w: {w}")
+            print(f"th: {th} | tw: {tw}")
+            print(f"i: {i} | j: {j}")
             df = np.reshape(df, newshape=(self.length*2, h*2, w*2, 3))[::2,::2,::2,:][:, i:i+th, j:j+tw, :]
             
         if self.mode == 'flow':
@@ -106,8 +114,8 @@ class HMDB(data_utl.Dataset):
 
 if __name__ == '__main__':
     DS = HMDB
-    dataseta = DS('data/hmdb/split1_train.txt', '/ssd/hmdb/', model='2d', mode='flow', length=16)
-    dataset = DS('data/hmdb/split1_test.txt', '/ssd/hmdb/', model='2d', mode='rgb', length=16, c2i=dataseta.class_to_id)
+    dataseta = DS('data/hmdb/split0_train.txt', '/ssd/hmdb/', model='2d', mode='flow', length=16)
+    dataset = DS('data/hmdb/split0_test.txt', '/ssd/hmdb/', model='2d', mode='rgb', length=16, c2i=dataseta.class_to_id)
 
     for i in range(len(dataseta)):
         print(dataseta[i][0].shape)
