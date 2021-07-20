@@ -14,6 +14,8 @@ parser.add_argument('-batch_size', type=int, default=24)
 parser.add_argument('-length', type=int, default=16)
 parser.add_argument('-learnable', type=str, default='[0,0,0,0,0]')
 parser.add_argument('-niter', type=int)
+parser.add_argument('-system', type=str, help='v100, k80, titanx, ultra, hmdb')
+parser.add_argument('-model', type=str)
 
 args = parser.parse_args()
 
@@ -26,7 +28,7 @@ from torch.optim import lr_scheduler
 #import models
 import flow_2p1d_resnets
 
-device = torch.device('cuda')
+device = torch.device('cpu')
 
 ##################
 #
@@ -34,18 +36,18 @@ device = torch.device('cuda')
 #
 ##################
 model = flow_2p1d_resnets.resnet50(pretrained=False, mode=args.mode, n_iter=args.niter, learnable=eval(args.learnable), num_classes=400)
-    
+
 model = nn.DataParallel(model).to(device)
 batch_size = args.batch_size
 
 
 if args.system == 'hmdb':
     from hmdb_dataset import HMDB as DS
-    dataseta = DS('data/hmdb/split1_train.txt', '/ssd/hmdb/', model=args.model, mode=args.mode, length=args.length)
-    dl = torch.utils.data.DataLoader(dataseta, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    dataseta = DS('data/hmdb/split0_train.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length)
+    dl = torch.utils.data.DataLoader(dataseta, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     
-    dataset = DS('data/hmdb/split1_test.txt', '/ssd/hmdb/', model=args.model, mode=args.mode, length=args.length, c2i=dataseta.class_to_id)
-    vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    dataset = DS('data/hmdb/split0_test.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length, c2i=dataseta.class_to_id)
+    vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     dataloader = {'train':dl, 'val':vdl}
 
 
@@ -55,10 +57,10 @@ if args.system == 'minikinetics':
     root = '/ssd/kinetics/'
     from minikinetics_dataset import MK
     dataset_tr = MK(train, root, length=args.length, model=args.model, mode=args.mode)
-    dl = torch.utils.data.DataLoader(dataset_tr, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    dl = torch.utils.data.DataLoader(dataset_tr, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
 
     dataset = MK(val, root, length=args.length, model=args.model, mode=args.mode)
-    vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     dataloader = {'train':dl, 'val':vdl}
 
 if args.system == 'kinetics':
@@ -67,10 +69,10 @@ if args.system == 'kinetics':
     root = '/ssd/kinetics/'
     from minikinetics_dataset import MK
     dataset_tr = MK(train, root, length=args.length, model=args.model, mode=args.mode)
-    dl = torch.utils.data.DataLoader(dataset_tr, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    dl = torch.utils.data.DataLoader(dataset_tr, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
 
     dataset = MK(val, root, length=args.length, model=args.model, mode=args.mode)
-    vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     dataloader = {'train':dl, 'val':vdl}
 
     
@@ -78,7 +80,7 @@ if args.system == 'kinetics':
 params = model.parameters()
 params = [p for p in params]
 other = []
-print(len(params))
+# print(len(params))
 ln = eval(args.learnable)
 if ln[0] == 1:
     other += [p for p in params if (p.sum() == model.module.flow_layer.img_grad.sum()).all() and p.size() == model.module.flow_layer.img_grad.size()]
@@ -108,7 +110,7 @@ if ln[4] == 1:
     
 #print([p for p in model.parameters() if (p == model.module.flow_layer.t).all()])
 #print(other)
-print(len(params), len(other))
+# print(len(params), len(other))
 #exit()
 
 lr = 0.01
@@ -122,18 +124,16 @@ lr_sched = optim.lr_scheduler.ReduceLROnPlateau(solver, patience=7)
 # hyper-parameters, etc...
 #
 #################
-log_name = datetime.datetime.today().strftime('%m-%d-%H%M')+'-'+args.exp_name
-log_path = os.path.join('logs/',log_name)
-os.mkdir(log_path)
-os.system('cp * logs/'+log_name+'/')
+# log_name = datetime.datetime.today().strftime('%Y-%m-%d-%H%M')+'-'+args.exp_name
+# log_path = os.path.join('logs/', log_name)
+# os.mkdir(log_path)
+# os.system('cp * logs/'+log_name+'/')
 
 # deal with hyper-params...
-with open(os.path.join(log_path,'params.json'), 'w') as out:
-    hyper = vars(args)
-    json.dump(hyper, out)
+# with open(os.path.join(log_path,'params.json'), 'w') as out:
+#     hyper = vars(args)
+#     json.dump(hyper, out)
 log = {'iterations':[], 'epoch':[], 'validation':[], 'train_acc':[], 'val_acc':[]}
-
-    
 
 ###############
 #
@@ -195,9 +195,10 @@ for epoch in range(num_epochs):
             print('val loss', tloss/c, 'acc', acc/tot)
             lr_sched.step(tloss/c)
     
-    with open(os.path.join(log_path,'log.json'), 'w') as out:
-        json.dump(log, out)
-    torch.save(model.state_dict(), os.path.join(log_path, 'hmdb_flow-of-flow_2p1d.pt'))
+    # with open(os.path.join(log_path,'log.json'), 'w') as out:
+        # json.dump(log, out)
+    # torch.save(model.state_dict(), os.path.join(log_path, 'hmdb_flow-of-flow_2p1d.pt'))
 
 
     #lr_sched.step()
+    # python train_model.py -mode flow -exp_name "test" -batch_size 32 -length 32 -learnable "[0,1,1,1,1]" -niter 20 -system "hmdb" -model "3d"

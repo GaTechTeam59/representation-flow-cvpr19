@@ -1,0 +1,1 @@
+{"mode": "rgb", "exp_name": "hmdb-final-wfof", "model": "3d", "fm": null, "batch_size": 32, "length": 32, "system": "hmdb", "learnable": "[0,1,1,1,1]", "config": null, "niter": 20}
