@@ -115,7 +115,7 @@ class ResNet(nn.Module):
         self.flow_conv2 = nn.Conv3d(64, 128*block.expansion, kernel_size=(1,3,3), stride=1, padding=(0,1,1), bias=False)
         self.bnf = nn.BatchNorm3d(128*block.expansion)
         
-        self.conv1 = nn.Conv3d(in_channels, 64, kernel_size=3, stride=(1,2,2), padding=(0,3,3),
+        self.conv1 = nn.Conv3d(in_channels, 64, kernel_size=7, stride=(1,2,2), padding=(0,3,3),
                                bias=False)
         self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)

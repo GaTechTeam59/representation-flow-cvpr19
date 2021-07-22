@@ -3,3 +3,9 @@
 *#
 logs/
 tmp/
+hmdb51_org
+hmdb51_org_unzipped
+hmdb51_sta
+hmdb51_sta_unzipped
+*.DS_STORE
+hmdb-fof-model

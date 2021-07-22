@@ -60,7 +60,6 @@ class HMDB(data_utl.Dataset):
 
     def __getitem__(self, index):
         vid, cls = self.data[index]
-
         with open(vid, 'rb') as f:
             enc_vid = f.read()
 
@@ -79,8 +78,8 @@ class HMDB(data_utl.Dataset):
         else:
             th = self.size
             tw = self.size
-            i = random.randint(0, np.maximum(h - th, 0)) if h!=th else 0
-            j = random.randint(0, np.maximum(w - tw, 0)) if w!=tw else 0
+            i = random.randint(0, h - th) if h!=th else 0
+            j = random.randint(0, w - tw) if w!=tw else 0
             print(f"h: {h} | w: {w}")
             print(f"th: {th} | tw: {tw}")
             print(f"i: {i} | j: {j}")
