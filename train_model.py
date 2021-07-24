@@ -27,6 +27,7 @@ from torch.optim import lr_scheduler
 
 #import models
 import flow_2p1d_resnets
+import testmodel
 
 device = torch.device('cpu')
 
@@ -35,7 +36,8 @@ device = torch.device('cpu')
 # Create model, dataset, and training setup
 #
 ##################
-model = flow_2p1d_resnets.resnet50(pretrained=False, mode=args.mode, n_iter=args.niter, learnable=eval(args.learnable), num_classes=400)
+model = testmodel.resnet18(pretrained=False, mode=args.mode, n_iter=args.niter, learnable=eval(args.learnable), num_classes=400)
+
 
 model = nn.DataParallel(model).to(device)
 batch_size = args.batch_size
@@ -75,10 +77,11 @@ if args.system == 'kinetics':
     vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     dataloader = {'train':dl, 'val':vdl}
 
-    
+
 # scale lr for flow layer
 params = model.parameters()
 params = [p for p in params]
+""" 
 other = []
 # print(len(params))
 ln = eval(args.learnable)
@@ -105,7 +108,7 @@ if ln[3] == 1:
 if ln[4] == 1:
     other += [p for p in params if (p.sum() == model.module.flow_layer.a.sum()).all() and p.size() == model.module.flow_layer.a.size()]
     params = [p for p in params if (p.sum() != model.module.flow_layer.a.sum()).all() or p.size() != model.module.flow_layer.a.size()]
-
+"""
 
     
 #print([p for p in model.parameters() if (p == model.module.flow_layer.t).all()])
@@ -114,7 +117,7 @@ if ln[4] == 1:
 #exit()
 
 lr = 0.01
-solver = optim.SGD([{'params':params}, {'params':other, 'lr':0.01*lr}], lr=lr, weight_decay=1e-6, momentum=0.9)
+solver = optim.SGD([{'params':params}], lr=lr, weight_decay=1e-6, momentum=0.9)
 lr_sched = optim.lr_scheduler.ReduceLROnPlateau(solver, patience=7)
 
 
@@ -140,6 +143,8 @@ log = {'iterations':[], 'epoch':[], 'validation':[], 'train_acc':[], 'val_acc':[
 # Train the model and save everything
 #
 ###############
+
+
 num_epochs = 60
 for epoch in range(num_epochs):
 
@@ -160,6 +165,9 @@ for epoch in range(num_epochs):
             for vid, cls in dataloader[phase]:
                 if c%200 == 0:
                     print('epoch',epoch,'iter',c)
+
+                print(vid.shape)
+                print(cls.shape)
                 #s=time.time()
                 #print('btw batch', (s-e)*1000)
                 vid = vid.to(device)

@@ -73,17 +73,29 @@ class FlowLayer(nn.Module):
         
         
     def forward(self, x):
+        print("start of layer residual", x.size())
         residual = x[:,:,:-1]
+        print("forward layer residual", residual.size())
         x = self.bottleneck(x)
+        print("start of after bottleneck", x.size())
         inp = self.norm_img(x)
+        print("after image norm", inp.size())
         x = inp[:,:,:-1]
         y = inp[:,:,1:]
+
+        print("size of x", x.size())
+        print("size of y", y.size())
+
         b,c,t,h,w = x.size()
         x = x.permute(0,2,1,3,4).contiguous().view(b*t,c,h,w)
         y = y.permute(0,2,1,3,4).contiguous().view(b*t,c,h,w)
-        
+
+        print("size of x", x.size())
+        print("size of y", y.size())
+
         u1 = torch.zeros_like(x)
         u2 = torch.zeros_like(x)
+
         l_t = self.l * self.t
         taut = self.a/self.t
 
@@ -120,7 +132,10 @@ class FlowLayer(nn.Module):
             v1[mask2] = (-l_t * grad2_x)[mask2]
             v2[mask2] = (-l_t * grad2_y)[mask2]
 
-            mask3 = ((mask1^1) & (mask2^1) & (grad > 1e-12)).detach()
+            print(mask1.size())
+            print(mask2.size())
+
+            mask3 = ((mask1) & (mask2) & (grad > 1e-12)).detach()
             v1[mask3] = ((-rho/grad) * grad2_x)[mask3]
             v2[mask3] = ((-rho/grad) * grad2_y)[mask3]
             del rho
@@ -153,8 +168,11 @@ class FlowLayer(nn.Module):
 
 
         flow = torch.cat([u1,u2], dim=1)
+        print("final flow shape", flow.shape)
         flow = flow.view(b,t,c*2,h,w).contiguous().permute(0,2,1,3,4)
+        print("final flow shape", flow.shape)
         flow = self.unbottleneck(flow)
         flow = self.bn(flow)
+        print("final flow shape", flow.shape)
         return F.relu(residual+flow)
         
