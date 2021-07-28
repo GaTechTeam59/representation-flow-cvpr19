@@ -105,12 +105,12 @@ class ResNet(nn.Module):
         self.config = config
         self.flow_cmp = nn.Conv3d(128 * block.expansion, 32, kernel_size=1, stride=1, padding=0, bias=False)
         self.flow_layer = FlowLayer(channels=32, n_iter=n_iter, params=learnable)
-        self.flow_conv = nn.Conv3d(32, 64, kernel_size=(1, 3, 3), stride=1, padding=(0, 1, 1), bias=False)
+        self.flow_conv = nn.Conv3d(64, 64, kernel_size=(1, 3, 3), stride=1, padding=(0, 1, 1), bias=False)
 
         # Flow-of-flow
         self.flow_cmp2 = nn.Conv3d(64, 32, kernel_size=1, stride=1, padding=0, bias=False)
         self.flow_layer2 = FlowLayer(channels=32, n_iter=n_iter, params=learnable)
-        self.flow_conv2 = nn.Conv3d(32, 128 * block.expansion, kernel_size=(1, 3, 3), stride=1, padding=(0, 1, 1),
+        self.flow_conv2 = nn.Conv3d(64, 128 * block.expansion, kernel_size=(1, 3, 3), stride=1, padding=(0, 1, 1),
                                     bias=False)
         self.bnf = nn.BatchNorm3d(128 * block.expansion)
 
@@ -184,16 +184,17 @@ class ResNet(nn.Module):
         t = t - 1
         # compute flow for 0,1,...,T-1
         #        and       1,2,...,T
-        #u, v = self.flow_layer(x[:, :, :-1].permute(0, 2, 1, 3, 4).contiguous().view(-1, c, h, w))
-        u, v = self.flow_layer(x)
+        u, v = self.flow_layer(x[:, :, :-1].permute(0, 2, 1, 3, 4).contiguous().view(-1, c, h, w),
+                                x[:, :, 1:].permute(0, 2, 1, 3, 4).contiguous().view(-1, c, h, w))
+        #u, v = self.flow_layer(x)
 
         print("flow layer output", u.size(), v.size())
 
         x = torch.cat([u, v], dim=1)
         print(x.size())
 
-        #x = x.view(b, t, c * 2, h, w).permute(0, 2, 1, 3, 4).contiguous()
-        x = x.view(b, t, c , h, w).permute(0, 2, 1, 3, 4).contiguous()
+        x = x.view(b, t, c * 2, h, w).permute(0, 2, 1, 3, 4).contiguous()
+        #x = x.view(b, t, c , h, w).permute(0, 2, 1, 3, 4).contiguous()
         print(x.size())
         x = self.flow_conv(x)
 
@@ -206,12 +207,12 @@ class ResNet(nn.Module):
         t = t - 1
         # compute flow for 0,1,...,T-1
         #        and       1,2,...,T
-        #u, v = self.flow_layer2(x[:, :, :-1].permute(0, 2, 1, 3, 4).contiguous().view(-1, c, h, w),
-        #                        x[:, :, 1:].permute(0, 2, 1, 3, 4).contiguous().view(-1, c, h, w))
+        u, v = self.flow_layer2(x[:, :, :-1].permute(0, 2, 1, 3, 4).contiguous().view(-1, c, h, w),
+                                x[:, :, 1:].permute(0, 2, 1, 3, 4).contiguous().view(-1, c, h, w))
 
-        u, v = self.flow_layer2(x)
+        #u, v = self.flow_layer2(x)
         x = torch.cat([u, v], dim=1)
-        x = x.view(b, t, c, h, w).permute(0, 2, 1, 3, 4).contiguous()
+        x = x.view(b, t, c * 2 , h, w).permute(0, 2, 1, 3, 4).contiguous()
         x = self.flow_conv2(x)
         x = self.bnf(x)
         x = x + res
