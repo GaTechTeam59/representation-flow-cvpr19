@@ -26,12 +26,19 @@ import flow_2p1d_resnets
 
 
 class Model:
-    def __init__(self, device):
+    def __init__(self, device, args):
         self.device = device
-
-    def train(self, args):
-        model = flow_2p1d_resnets.resnet50(pretrained=False, mode=args.mode, n_iter=args.niter,
+        if args.resnet == 50:
+            self.model = flow_2p1d_resnets.resnet50(pretrained=False, mode=args.mode, n_iter=args.niter,
                                            learnable=eval(args.learnable), num_classes=400)
+        if args.resnet == 18:
+            self.model = flow_2p1d_resnets.resnet18(pretrained=False, mode=args.mode, n_iter=args.niter,
+                                           learnable=eval(args.learnable), num_classes=400)
+        self.args = args
+
+    def train(self):
+        model = self.model
+        args = self.args
 
         model = nn.DataParallel(model).to(self.device)
         batch_size = args.batch_size
@@ -136,16 +143,16 @@ class Model:
         # hyper-parameters, etc...
         #
         #################
-        log_name = datetime.datetime.today().strftime('%m-%d-%H%M')+'-'+args.exp_name
-        os.mkdir('./logs')  # REF added
-        log_path = os.path.join('logs/',log_name)
-        os.mkdir(log_path)
-        os.system('cp * logs/'+log_name+'/')
+        #log_name = datetime.datetime.today().strftime('%m-%d-%H%M')+'-'+args.exp_name
+        #os.mkdir('./logs')  # REF added
+        #log_path = os.path.join('logs/',log_name)
+        #os.mkdir(log_path)
+        # os.system('cp * logs/'+log_name+'/')  # REF
 
         # deal with hyper-params...
-        with open(os.path.join(log_path,'params.json'), 'w') as out:
-            hyper = vars(args)
-            json.dump(hyper, out)
+        #with open(os.path.join(log_path,'params.json'), 'w') as out:
+        #    hyper = vars(args)
+        #    json.dump(hyper, out)
         log = {'iterations':[], 'epoch':[], 'validation':[], 'train_acc':[], 'val_acc':[]}
 
 
@@ -210,9 +217,9 @@ class Model:
                     print('val loss', tloss/c, 'acc', acc/tot)
                     lr_sched.step(tloss/c)
 
-            with open(os.path.join(log_path,'log.json'), 'w') as out:
-                json.dump(log, out)
-            torch.save(model.state_dict(), os.path.join(log_path, 'hmdb_flow-of-flow_2p1d.pt'))
+            #with open(os.path.join(log_path,'log.json'), 'w') as out:
+            #    json.dump(log, out)
+            #torch.save(model.state_dict(), os.path.join(log_path, 'hmdb_flow-of-flow_2p1d.pt'))
 
 
             #lr_sched.step()
