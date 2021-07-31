@@ -8,8 +8,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+#### My own code implementations
 
-def conv3x3x3(in_planes, out_planes, stride=1):
+def get_inplanes():
+    return [64, 128, 256, 512]
+
+def conv_3d_3s_kerenl(in_planes, out_planes, stride):
     return nn.Conv3d(in_planes,
                      out_planes,
                      kernel_size=3,
@@ -17,86 +21,63 @@ def conv3x3x3(in_planes, out_planes, stride=1):
                      padding=1,
                      bias=False)
 
-
-def conv1x1x1(in_planes, out_planes, stride=1):
+def conv_3d_3s_kerenl(in_planes, out_planes, stride=1):
     return nn.Conv3d(in_planes,
                      out_planes,
                      kernel_size=1,
                      stride=stride,
                      bias=False)
 
-
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, stride=1, downsample=None):
+    def __init__(self, in_planes, out_planes, stride=1, downsample=None):
         super().__init__()
 
-        self.conv1 = conv3x3x3(in_planes, planes, stride)
-        self.bn1 = nn.BatchNorm3d(planes)
+        self.conv1 = conv_3d_3s_kerenl(in_planes, out_planes, stride)
+        self.bn1 = nn.BatchNorm3d(out_planes)
+
+        self.conv2 = conv_3d_3s_kerenl(out_planes, out_planes, stride = 1)
+        self.bn2 = nn.BatchNorm3d(out_planes)
+
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3x3(planes, planes)
-        self.bn2 = nn.BatchNorm3d(planes)
-        self.downsample = downsample
-        self.stride = stride
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != out_planes:
+            self.shortcut = nn.Sequential(
+                conv_3d_3s_kerenl(in_planes, out_planes, stride),
+                nn.BatchNorm3d(out_planes))
+
 
     def forward(self, x):
-        residual = x
+        residual_shortcut = x
 
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
+        print("basic block")
+        print(residual_shortcut.shape)
 
-        out = self.conv2(out)
-        out = self.bn2(out)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
 
-        if self.downsample is not None:
-            residual = self.downsample(x)
+        print("block conv 1")
+        print(x.shape)
 
-        out += residual
-        out = self.relu(out)
+        x = self.conv2(x)
+        x  = self.bn2(x)
 
-        return out
+        print("block conv 2")
+        print(x.shape)
 
 
-class Bottleneck(nn.Module):
-    expansion = 4
+        residual_shortcut = self.shortcut(residual_shortcut)
 
-    def __init__(self, in_planes, planes, stride=1, downsample=None):
-        super().__init__()
+        print("match ")
+        print(residual_shortcut.size())
 
-        self.conv1 = conv1x1x1(in_planes, planes)
-        self.bn1 = nn.BatchNorm3d(planes)
-        self.conv2 = conv3x3x3(planes, planes, stride)
-        self.bn2 = nn.BatchNorm3d(planes)
-        self.conv3 = conv1x1x1(planes, planes * self.expansion)
-        self.bn3 = nn.BatchNorm3d(planes * self.expansion)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
+        x += residual_shortcut
+        output = self.relu(x)
 
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
-
+        return output
 
 class ResNet(nn.Module):
 
@@ -124,9 +105,11 @@ class ResNet(nn.Module):
                                stride=(conv1_t_stride, 2, 2),
                                padding=(conv1_t_size // 2, 3, 3),
                                bias=False)
+
         self.bn1 = nn.BatchNorm3d(self.in_planes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
+
         self.layer1 = self._make_layer(block, block_inplanes[0], layers[0],
                                        shortcut_type)
         self.layer2 = self._make_layer(block,
@@ -169,23 +152,13 @@ class ResNet(nn.Module):
         return out
 
     def _make_layer(self, block, planes, blocks, shortcut_type, stride=1):
-        downsample = None
-        if stride != 1 or self.in_planes != planes * block.expansion:
-            if shortcut_type == 'A':
-                downsample = partial(self._downsample_basic_block,
-                                     planes=planes * block.expansion,
-                                     stride=stride)
-            else:
-                downsample = nn.Sequential(
-                    conv1x1x1(self.in_planes, planes * block.expansion, stride),
-                    nn.BatchNorm3d(planes * block.expansion))
-
         layers = []
         layers.append(
             block(in_planes=self.in_planes,
-                  planes=planes,
+                  out_planes=planes,
                   stride=stride,
-                  downsample=downsample))
+                  downsample=None))
+
         self.in_planes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(self.in_planes, planes))
@@ -193,15 +166,28 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        print("lets see what comes into the resnet")
+        print(x.size())
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+
+        print("see what conv1 does")
+        print(x.size())
+
         if not self.no_max_pool:
             x = self.maxpool(x)
 
+        print("start the layers")
+
         x = self.layer1(x)
+
+        print("done with layer 1")
         x = self.layer2(x)
+
+        print("done with layer 2")
         x = self.layer3(x)
+        print("done with layer 3")
         x = self.layer4(x)
 
         x = self.avgpool(x)
@@ -212,24 +198,10 @@ class ResNet(nn.Module):
         return x
 
 
-def generate_model(model_depth, **kwargs):
-    assert model_depth in [10, 18, 34, 50, 101, 152, 200]
-
-    if model_depth == 10:
-        model = ResNet(BasicBlock, [1, 1, 1, 1], get_inplanes(), **kwargs)
-    elif model_depth == 18:
-        model = ResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(), **kwargs)
-    elif model_depth == 34:
-        model = ResNet(BasicBlock, [3, 4, 6, 3], get_inplanes(), **kwargs)
-    elif model_depth == 50:
-        model = ResNet(Bottleneck, [3, 4, 6, 3], get_inplanes(), **kwargs)
-    elif model_depth == 101:
-        model = ResNet(Bottleneck, [3, 4, 23, 3], get_inplanes(), **kwargs)
-    elif model_depth == 152:
-        model = ResNet(Bottleneck, [3, 8, 36, 3], get_inplanes(), **kwargs)
-    elif model_depth == 200:
-        model = ResNet(Bottleneck, [3, 24, 36, 3], get_inplanes(), **kwargs)
+def generate_resent18(**kwargs):
+    model = ResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(), **kwargs)
 
     return model
+
 
 

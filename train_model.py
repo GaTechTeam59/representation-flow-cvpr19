@@ -28,6 +28,8 @@ from torch.optim import lr_scheduler
 #import models
 import flow_2p1d_resnets
 import testmodel
+import testmodel_resnet
+
 
 device = torch.device('cpu')
 
@@ -36,8 +38,14 @@ device = torch.device('cpu')
 # Create model, dataset, and training setup
 #
 ##################
-model = testmodel.resnet18(pretrained=False, mode=args.mode, n_iter=args.niter, learnable=eval(args.learnable), num_classes=400)
 
+#--model_depth 18 --n_pretrain_classes 700
+#model = testmodel_resent.generate_resent18(pretrained=False, mode=args.mode, n_iter=args.niter, learnable=eval(args.learnable), num_classes=400)
+
+
+model = testmodel_resnet.generate_resent18(
+                                           n_classes= 700
+                                           )
 
 model = nn.DataParallel(model).to(device)
 batch_size = args.batch_size
@@ -145,9 +153,8 @@ log = {'iterations':[], 'epoch':[], 'validation':[], 'train_acc':[], 'val_acc':[
 ###############
 
 
-num_epochs = 60
+num_epochs = 10
 for epoch in range(num_epochs):
-
     for phase in ['train', 'val']:
         train = (phase=='train')
         if phase == 'train':
@@ -160,9 +167,15 @@ for epoch in range(num_epochs):
         tot = 0
         c = 0
         e=s=0
-
+        print(len(dataloader[phase]))
+        i = 0
         with torch.set_grad_enabled(train):
+
+
             for vid, cls in dataloader[phase]:
+                print("iteration", i)
+                i = i + 1
+
                 if c%200 == 0:
                     print('epoch',epoch,'iter',c)
 
