@@ -1,110 +1,76 @@
 import torch
 import torch.utils.data as data_utl
 
-import numpy as np
-import random
+import torch
+from torchvision import datasets
+import torchvision.transforms as transforms
 
-import os
-import lintel
-
-def video_to_tensor(pic):
-    """Convert a ``numpy.ndarray`` to tensor.
-    Converts a numpy.ndarray (T x H x W x C)
-    to a torch.FloatTensor of shape (C x T x H x W)
-    
-    Args:
-         pic (numpy.ndarray): Video to be converted to tensor.
-    Returns:
-         Tensor: Converted video.
-    """
-    return torch.from_numpy(pic.transpose([3,0,1,2]))
-
+def center_crop(img: torch.Tensor, output_size: int):
+    img = torch.transpose(torch.transpose(img, 2, 3), 1, 2)
+    cropped_list = []
+    for i in range(img.shape[0]):
+        pil_img = transforms.functional.to_pil_image(img[i, :, :, :])
+        cropped_pil = transforms.functional.center_crop(pil_img, output_size)
+        cropped = transforms.functional.to_tensor(cropped_pil)
+        cropped = torch.transpose(torch.transpose(cropped, 1, 0), 2, 1)
+        cropped_list.append(cropped)
+    stacked_cropped_list = torch.stack(cropped_list)
+    return stacked_cropped_list
 
 
 class HMDB(data_utl.Dataset):
+    # test or train
+    def __init__(self, stage):
+        length = 32
+        size = 112
+        root = "/Users/jakeknigge/docs/github-clones/representation-flow-cvpr19/hmdb51_org_subset"
+        annotation_path = "/Users/jakeknigge/downloads/testTrainMulti_7030_splits-test"
+        frames_per_clip = length * 2
+        step_between_clips = 1
+        fold = 1
+        self.data = datasets.HMDB51(
+            root=root,
+            annotation_path=annotation_path,
+            frames_per_clip=frames_per_clip,
+            step_between_clips=step_between_clips,
+            fold=fold,
+            train= stage,
+            transform=transforms.Lambda(lambda frames: center_crop(frames, output_size=size))
+        )
 
-    def __init__(self, split_file, root, mode='rgb', length=16, model='2d', random=False, c2i={}):
-        self.class_to_id = c2i
-        self.id_to_class = []
-        for i in range(len(c2i.keys())):
-            for k in c2i.keys():
-                if c2i[k] == i:
-                    self.id_to_class.append(k)
-        cid = 0
-        self.data = []
-        self.model = model
-        self.size = 112
 
-        with open(split_file, 'r') as f:
-            for l in f.readlines():
-                if len(l) <= 5:
-                    continue
-                v,c = l.strip().split(' ')
-                v_out = v.split('.')[0]+'_0.mp4'
-                # print(f"v: {v} | v_out: {v_out} | c: {c}")
-                if v_out not in os.listdir("./ssd/hmdb"):
-                    cmd = f"cd ./ssd/hmdb && ffmpeg -i {v} -c:v copy -c:a copy {v_out} && cd .."
-                    os.system(cmd)
-                v = v.split('.')[0]+'_0.mp4'
-                if c not in self.class_to_id:
-                    self.class_to_id[c] = cid
-                    self.id_to_class.append(c)
-                    cid += 1
-                self.data.append([os.path.join(root, v), self.class_to_id[c]])
 
-        self.split_file = split_file
-        self.root = root
-        self.mode = mode
-        self.length = length
-        self.random = random
+        ### Classes definition also required
+
 
     def __getitem__(self, index):
-        vid, cls = self.data[index]
-        with open(vid, 'rb') as f:
-            enc_vid = f.read()
+        classes = ["cartwheel", "climb", "dive", "kick", "pullup", "run", "sit",
+                   "situp", "somersault", "stand"]
+        class_labels = {i: classes[i] for i in range(len(classes))}
 
-        df, w, h, _ = lintel.loadvid(enc_vid, should_random_seek=self.random, num_frames=self.length*2)
-        df = np.frombuffer(df, dtype=np.uint8)
+        pred_idx = [i + j for i in [0, 1, 2, 3] for j in [0, 1000, 2000, 3000, 4000]]
+        pred_idx.sort()
+        for k in pred_idx:
+            sample = self.data.__getitem__(k)
+            frames = sample[0].permute(3, 0, 1, 2).unsqueeze(0)
 
-        w=w//2
-        h=h//2
-        # print(f"w {w} | h {h} | df\n{df}")
-        
-        # center crop
-        if not self.random:
-            i = int(round((h-self.size)/2.))
-            j = int(round((w-self.size)/2.))
-            df = np.reshape(df, newshape=(self.length*2, h*2, w*2, 3))[::2,::2,::2,:][:, i:-i, j:-j, :]
-        else:
-            th = self.size
-            tw = self.size
-            i = random.randint(0, h - th) if h!=th else 0
-            j = random.randint(0, w - tw) if w!=tw else 0
-            print(f"h: {h} | w: {w}")
-            print(f"th: {th} | tw: {tw}")
-            print(f"i: {i} | j: {j}")
-            df = np.reshape(df, newshape=(self.length*2, h*2, w*2, 3))[::2,::2,::2,:][:, i:i+th, j:j+tw, :]
-            
-        if self.mode == 'flow':
-            #print(df[:,:,:,1:].mean())
-            #exit()
-            # only take the 2 channels corresponding to flow (x,y)
-            df = df[:,:,:,1:]
-            if self.model == '2d':
-                # this should be redone...
-                # stack 10 along channel axis
-                df = np.asarray([df[:10],df[2:12],df[4:14]]) # gives 3x10xHxWx2
-                df = df.transpose(0,1,4,2,3).reshape(3,20,self.size,self.size).transpose(0,2,3,1)
-            
-        print(f"w {w} | h {h} | df\n{df}")        
-        df = 1-2*(df.astype(np.float32)/255)
+            """
+            net.eval()
+            with torch.no_grad():
+                predclass = torch.argmax(net(frames).squeeze())
+                print((f"sample: {k} | "
+                       f"predicted class label: {predclass} | "
+                    f"sample class label: {sample[2]} ({class_labels[sample[2]]})"))
+                    
+            """
 
-        if self.model == '2d':
-            # 2d -> return TxCxHxW
-            return df.transpose([0,3,1,2]), cls
-        # 3d -> return CxTxHxW
-        return df.transpose([3,0,1,2]), cls
-
+        print(data)
+        frames = data.__getitem__(0)[0]
+        print(data.__getitem__(0))
+        frames_ = frames.permute(3, 0, 1, 2).unsqueeze(0)
+        print(frames.shape)
+        print(frames_.shape)
+        return frames_
 
     def __len__(self):
         return len(self.data)
@@ -118,3 +84,4 @@ if __name__ == '__main__':
 
     for i in range(len(dataseta)):
         print(dataseta[i][0].shape)
+

@@ -42,18 +42,23 @@ device = torch.device('cpu')
 #--model_depth 18 --n_pretrain_classes 700
 #model = testmodel_resent.generate_resent18(pretrained=False, mode=args.mode, n_iter=args.niter, learnable=eval(args.learnable), num_classes=400)
 
+torch.distributed.init_process_group(
+    backend='BACKEND',
+    init_method='env://'
+)
 
-model = testmodel_resnet.generate_resent18(
-                                           n_classes= 700
-                                           )
+model = testmodel_resnet.generate_resent18\
+                        (
+                           n_classes= 700
+                        )
 
-model = nn.DataParallel(model).to(device)
+model = torch.nn.parallel.DistributedDataParallel(model).to(device)
 batch_size = args.batch_size
 
 
 if args.system == 'hmdb':
     from hmdb_dataset import HMDB as DS
-    dataseta = DS('data/hmdb/split0_train.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length)
+    dataseta = DS('data/hmdb/split0_train.txt', './ssd/hmdb/')
     dl = torch.utils.data.DataLoader(dataseta, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     
     dataset = DS('data/hmdb/split0_test.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length, c2i=dataseta.class_to_id)
