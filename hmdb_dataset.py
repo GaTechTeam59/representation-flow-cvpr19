@@ -40,12 +40,12 @@ class HMDB(data_utl.Dataset):
                 if len(l) <= 5:
                     continue
                 v,c = l.strip().split(' ')
-                v_out = mode+'_'+v.split('.')[0]+'.mp4'
+                v_out = v.split('.')[0]+'_0.mp4'
                 # print(f"v: {v} | v_out: {v_out} | c: {c}")
                 if v_out not in os.listdir("./ssd/hmdb"):
                     cmd = f"cd ./ssd/hmdb && ffmpeg -i {v} -c:v copy -c:a copy {v_out} && cd .."
                     os.system(cmd)
-                v = mode+'_'+v.split('.')[0]+'.mp4'
+                v = v.split('.')[0]+'_0.mp4'
                 if c not in self.class_to_id:
                     self.class_to_id[c] = cid
                     self.id_to_class.append(c)
@@ -63,12 +63,12 @@ class HMDB(data_utl.Dataset):
         with open(vid, 'rb') as f:
             enc_vid = f.read()
 
-        
         df, w, h, _ = lintel.loadvid(enc_vid, should_random_seek=self.random, num_frames=self.length*2)
         df = np.frombuffer(df, dtype=np.uint8)
 
         w=w//2
         h=h//2
+        # print(f"w {w} | h {h} | df\n{df}")
         
         # center crop
         if not self.random:
@@ -96,7 +96,7 @@ class HMDB(data_utl.Dataset):
                 df = np.asarray([df[:10],df[2:12],df[4:14]]) # gives 3x10xHxWx2
                 df = df.transpose(0,1,4,2,3).reshape(3,20,self.size,self.size).transpose(0,2,3,1)
             
-                
+        print(f"w {w} | h {h} | df\n{df}")        
         df = 1-2*(df.astype(np.float32)/255)
 
         if self.model == '2d':
