@@ -153,7 +153,7 @@ log = {'iterations':[], 'epoch':[], 'validation':[], 'train_acc':[], 'val_acc':[
 ###############
 
 
-num_epochs = 10
+num_epochs = 5
 for epoch in range(num_epochs):
     for phase in ['train', 'val']:
         train = (phase=='train')
