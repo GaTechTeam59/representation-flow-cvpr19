@@ -15,6 +15,8 @@ from torch.optim import lr_scheduler
 
 #import models
 import flow_2p1d_resnets
+import testmodel
+import testmodel_resnet
 
 # device = torch.device('cuda')
 
@@ -28,29 +30,38 @@ import flow_2p1d_resnets
 class Model:
     def __init__(self, device, args):
         self.device = device
-        if args.resnet == 50:
-            self.model = flow_2p1d_resnets.resnet50(pretrained=False, mode=args.mode, n_iter=args.niter,
-                                           learnable=eval(args.learnable), num_classes=400)
         if args.resnet == 18:
             #self.model = flow_2p1d_resnets.resnet18(pretrained=False, mode=args.mode, n_iter=args.niter,
             #                               learnable=eval(args.learnable), num_classes=400)
-            self.model = flow_2p1d_resnets.resnet18(pretrained=args.pretrained, pretrained_model=args.pretrained_model, mode=args.mode, n_iter=args.niter,
+            self.model = flow_2p1d_resnets.resnet18(pretrained=args.pretrained, pretrained_model=args.pretrained_model, n_iter=args.niter,
                                            learnable=eval(args.learnable), num_classes=400)
         if args.resnet == 34:
             #self.model = flow_2p1d_resnets.resnet34(pretrained=False, mode=args.mode, n_iter=args.niter,
             #                               learnable=eval(args.learnable), num_classes=400)
-            self.model = flow_2p1d_resnets.resnet34(pretrained=args.pretrained, pretrained_model=args.pretrained_model, # mode=args.mode, 
-                                           n_iter=args.niter,
-                                           learnable=eval(args.learnable), num_classes=51)
+            self.model = flow_2p1d_resnets.resnet34(pretrained=args.pretrained, 
+                                                    pretrained_model=args.pretrained_model, # mode=args.mode,
+                                                    n_iter=args.niter,
+                                                    learnable=eval(args.learnable), 
+                                                    num_classes=51)
+
+        # if args.resnet == <something else>:
+        #     self.model = test_model.ResNet(...)
         self.args = args
 
     def train(self):
         model = self.model
         args = self.args
 
+        """torch.distributed.init_process_group(
+            backend='BACKEND',
+            init_method='env://'
+        )
+        model = nn.parallel.DistributedDataParallel(model).to(device)
+        """
         model = nn.DataParallel(model).to(self.device)
         batch_size = args.batch_size
-
+	
+        """
         if args.system == 'hmdb':
             from hmdb_dataset import HMDB as DS
             dataseta = DS('data/hmdb/split0_train.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length)
@@ -59,91 +70,55 @@ class Model:
             dataset = DS('data/hmdb/split0_test.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length, c2i=dataseta.class_to_id)
             vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
             dataloader = {'train':dl, 'val':vdl}
-
-        if args.system == 'hmdb_noise_aware':
-            from hmdb_dataset import HMDB as DS
-            dataseta = DS('data/hmdb/split1_train.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length)
-            dl = torch.utils.data.DataLoader(dataseta, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-
-            dataset = DS('data/hmdb/split1_test.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length, c2i=dataseta.class_to_id)
-            vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+        """
+        
+        if args.system == "hmdb_subset":
+            from torch_hmdb_helper import get_hmdb_data
+            length = args.length  # 32
+            size = 112
+            root = args.root # "./hmdb51_org_subset"
+            annotation_path = args.annotation_path # "./data/hmdb/train_test_splits_subset"
+            frames_per_clip = length*2
+            step_between_clips = 1
+            fold = 1
+            
+            # train set
+            dataseta = get_hmdb_data(
+                size=size, 
+                root=root, 
+                annotation_path=annotation_path, 
+                frames_per_clip=frames_per_clip,
+                step_between_clips=step_between_clips,
+                fold=fold,
+                train=True
+            )
+            dl = torch.utils.data.DataLoader(dataseta, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
+            
+            # validation / test set
+            dataset = get_hmdb_data(
+                size=size, 
+                root=root, 
+                annotation_path=annotation_path, 
+                frames_per_clip=frames_per_clip,
+                step_between_clips=step_between_clips,
+                fold=fold,
+                train=False
+            )
+            vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
+            
             dataloader = {'train':dl, 'val':vdl}
-
-        if args.system == 'hmdb_noisy_test':
-            from hmdb_dataset import HMDB as DS
-            dataseta = DS('data/hmdb/split0_train.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length)
-            dl = torch.utils.data.DataLoader(dataseta, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-
-            dataset = DS('data/hmdb/split1_test.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length, c2i=dataseta.class_to_id)
-            vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-            dataloader = {'train':dl, 'val':vdl}
-
-        if args.system == 'minikinetics':
-            train = 'data/kinetics/minikinetics_train.json'
-            val = 'data/kinetics/minikinetics_val.json'
-            root = '/ssd/kinetics/'
-            from minikinetics_dataset import MK
-            dataset_tr = MK(train, root, length=args.length, model=args.model, mode=args.mode)
-            dl = torch.utils.data.DataLoader(dataset_tr, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-
-            dataset = MK(val, root, length=args.length, model=args.model, mode=args.mode)
-            vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-            dataloader = {'train':dl, 'val':vdl}
-
-        if args.system == 'kinetics':
-            train = 'data/kinetics/kinetics_train.json'
-            val = 'data/kinetics/kinetics_val.json'
-            root = '/ssd/kinetics/'
-            from minikinetics_dataset import MK
-            dataset_tr = MK(train, root, length=args.length, model=args.model, mode=args.mode)
-            dl = torch.utils.data.DataLoader(dataset_tr, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-
-            dataset = MK(val, root, length=args.length, model=args.model, mode=args.mode)
-            vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-            dataloader = {'train':dl, 'val':vdl}
-
-
+        
         # scale lr for flow layer
         params = model.parameters()
         params = [p for p in params]
-        other = []
-        print(len(params))
-        
-        """
-        ln = eval(args.learnable)
-        if ln[0] == 1:
-            other += [p for p in params if (p.sum() == model.module.flow_layer.img_grad.sum()).all() and p.size() == model.module.flow_layer.img_grad.size()]
-            other += [p for p in params if (p.sum() == model.module.flow_layer.img_grad2.sum()).all() and p.size() == model.module.flow_layer.img_grad2.size()]
-            params = [p for p in params if (p.sum() != model.module.flow_layer.img_grad.sum()).all() or p.size() != model.module.flow_layer.img_grad.size()]
-            params = [p for p in params if (p.sum() != model.module.flow_layer.img_grad2.sum()).all() or p.size() != model.module.flow_layer.img_grad2.size()]
-
-        if ln[1] == 1:
-            other += [p for p in params if (p.sum() == model.module.flow_layer.f_grad.sum()).all() and p.size() == model.module.flow_layer.f_grad.size()]
-            other += [p for p in params if (p.sum() == model.module.flow_layer.f_grad2.sum()).all() and p.size() == model.module.flow_layer.f_grad2.size()]
-            params = [p for p in params if (p.sum() != model.module.flow_layer.f_grad.sum()).all() or p.size() != model.module.flow_layer.f_grad.size()]
-            params = [p for p in params if (p.sum() != model.module.flow_layer.f_grad2.sum()).all() or p.size() != model.module.flow_layer.f_grad2.size()]
-
-        if ln[2] == 1:
-            other += [p for p in params if (p.sum() == model.module.flow_layer.t.sum()).all() and p.size() == model.module.flow_layer.t.size()]
-            params = [p for p in params if (p.sum() != model.module.flow_layer.t.sum()).all() or p.size() != model.module.flow_layer.t.size()]
-
-        if ln[3] == 1:
-            other += [p for p in params if (p.sum() == model.module.flow_layer.l.sum()).all() and p.size() == model.module.flow_layer.l.size()]
-            params = [p for p in params if (p.sum() != model.module.flow_layer.l.sum()).all() or p.size() != model.module.flow_layer.l.size()]
-
-        if ln[4] == 1:
-            other += [p for p in params if (p.sum() == model.module.flow_layer.a.sum()).all() and p.size() == model.module.flow_layer.a.size()]
-            params = [p for p in params if (p.sum() != model.module.flow_layer.a.sum()).all() or p.size() != model.module.flow_layer.a.size()]
-        """
 
 
         #print([p for p in model.parameters() if (p == model.module.flow_layer.t).all()])
-        #print(other)
-        print(len(params), len(other))
         #exit()
 
         lr = 0.01
-        solver = optim.SGD([{'params':params}, {'params':other, 'lr':0.01*lr}], lr=lr, weight_decay=1e-6, momentum=0.9)
+        #solver = optim.SGD([{'params':params}, {'params':other, 'lr':0.01*lr}], lr=lr, weight_decay=1e-6, momentum=0.9)
+        solver = optim.SGD([{'params':params}], lr=lr, weight_decay=1e-6, momentum=0.9)
         lr_sched = optim.lr_scheduler.ReduceLROnPlateau(solver, patience=7)
 
 
@@ -172,7 +147,7 @@ class Model:
         # Train the model and save everything
         #
         ###############
-        num_epochs = 60
+        num_epochs = args.num_epochs
         for epoch in range(num_epochs):
 
             for phase in ['train', 'val']:
@@ -182,6 +157,8 @@ class Model:
                 else:
                     model.eval()
 
+                num_classes = 10 # REF TODO: this is hard-coded; is there a way to derive this?
+                cm = np.zeros((num_classes, num_classes)).to(self.device)  # REF
                 tloss = 0.
                 acc = 0.
                 tot = 0
@@ -189,7 +166,8 @@ class Model:
                 e=s=0
 
                 with torch.set_grad_enabled(train):
-                    for vid, cls in dataloader[phase]:
+                    # for vid, cls in dataloader[phase]:
+                    for vid, _, cls in dataloader[phase]:
                         if c%200 == 0:
                             print('epoch',epoch,'iter',c)
                         #s=time.time()
@@ -201,6 +179,9 @@ class Model:
 
                         pred = torch.max(outputs, dim=1)[1]
                         corr = torch.sum((pred == cls).int())
+
+                        for i, j in zip(pred, cls):  # REF
+                            cm[i, j] += 1
                         acc += corr.item()
                         tot += vid.size(0)
                         loss = F.cross_entropy(outputs, cls)
@@ -221,12 +202,19 @@ class Model:
                     log['epoch'].append(tloss/c)
                     log['train_acc'].append(acc/tot)
                     print('train loss',tloss/c, 'acc', acc/tot)
+                    print("Confusion matrix")  # REF
+                    print(f"{cm:.4f}")  # REF
+                    print(f"train_acc: {np.trace(cm)/cm.sum():.4f}")
                 else:
                     log['validation'].append(tloss/c)
                     log['val_acc'].append(acc/tot)
                     print('val loss', tloss/c, 'acc', acc/tot)
                     lr_sched.step(tloss/c)
+                    print("Confusion matrix")  # REF
+                    print(f"{cm:.4f}")  # REF
+                    print(f"train_acc: {np.trace(cm)/cm.sum():.4f}")
 
+        return cm
             #with open(os.path.join(log_path,'log.json'), 'w') as out:
             #    json.dump(log, out)
             #torch.save(model.state_dict(), os.path.join(log_path, 'hmdb_flow-of-flow_2p1d.pt'))
