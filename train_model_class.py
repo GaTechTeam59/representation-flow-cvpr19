@@ -32,8 +32,16 @@ class Model:
             self.model = flow_2p1d_resnets.resnet50(pretrained=False, mode=args.mode, n_iter=args.niter,
                                            learnable=eval(args.learnable), num_classes=400)
         if args.resnet == 18:
-            self.model = flow_2p1d_resnets.resnet18(pretrained=False, mode=args.mode, n_iter=args.niter,
+            #self.model = flow_2p1d_resnets.resnet18(pretrained=False, mode=args.mode, n_iter=args.niter,
+            #                               learnable=eval(args.learnable), num_classes=400)
+            self.model = flow_2p1d_resnets.resnet18(pretrained=args.pretrained, pretrained_model=args.pretrained_model, mode=args.mode, n_iter=args.niter,
                                            learnable=eval(args.learnable), num_classes=400)
+        if args.resnet == 34:
+            #self.model = flow_2p1d_resnets.resnet34(pretrained=False, mode=args.mode, n_iter=args.niter,
+            #                               learnable=eval(args.learnable), num_classes=400)
+            self.model = flow_2p1d_resnets.resnet34(pretrained=args.pretrained, pretrained_model=args.pretrained_model, # mode=args.mode, 
+                                           n_iter=args.niter,
+                                           learnable=eval(args.learnable), num_classes=51)
         self.args = args
 
     def train(self):
@@ -100,6 +108,8 @@ class Model:
         params = [p for p in params]
         other = []
         print(len(params))
+        
+        """
         ln = eval(args.learnable)
         if ln[0] == 1:
             other += [p for p in params if (p.sum() == model.module.flow_layer.img_grad.sum()).all() and p.size() == model.module.flow_layer.img_grad.size()]
@@ -124,7 +134,7 @@ class Model:
         if ln[4] == 1:
             other += [p for p in params if (p.sum() == model.module.flow_layer.a.sum()).all() and p.size() == model.module.flow_layer.a.size()]
             params = [p for p in params if (p.sum() != model.module.flow_layer.a.sum()).all() or p.size() != model.module.flow_layer.a.size()]
-
+        """
 
 
         #print([p for p in model.parameters() if (p == model.module.flow_layer.t).all()])
