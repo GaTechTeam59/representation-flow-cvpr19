@@ -65,7 +65,6 @@ if args.system == 'hmdb':
     vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     dataloader = {'train':dl, 'val':vdl}
 
-
 if args.system == 'minikinetics':
     train = 'data/kinetics/minikinetics_train.json'
     val = 'data/kinetics/minikinetics_val.json'
@@ -90,6 +89,53 @@ if args.system == 'kinetics':
     vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     dataloader = {'train':dl, 'val':vdl}
 
+if args.system == "hmdb_subset":
+    from torch_hmdb_helper import get_hmdb_data
+    length = 30
+    size = 112
+    root = "./hmdb51_org_subset"
+    annotation_path = "./data/hmdb/train_test_splits_subset"
+    frames_per_clip = length*1
+    step_between_clips = 1
+    fold = 1
+
+    # train set
+    dataseta = get_hmdb_data(
+        size=size,
+        root=root,
+        annotation_path=annotation_path,
+        frames_per_clip=frames_per_clip,
+        step_between_clips=step_between_clips,
+        fold=fold,
+        train=True
+    )
+    dl = torch.utils.data.DataLoader(
+        dataseta,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True
+    )
+
+    # validation / test set
+    dataset = get_hmdb_data(
+        size=size,
+        root=root,
+        annotation_path=annotation_path,
+        frames_per_clip=frames_per_clip,
+        step_between_clips=step_between_clips,
+        fold=fold,
+        train=False
+    )
+    vdl = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True
+    )
+
+    dataloader = {'train':dl, 'val':vdl}
 
 # scale lr for flow layer
 params = model.parameters()

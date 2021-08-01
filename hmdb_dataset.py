@@ -44,33 +44,52 @@ class HMDB(data_utl.Dataset):
 
 
     def __getitem__(self, index):
-        classes = ["cartwheel", "climb", "dive", "kick", "pullup", "run", "sit",
-                   "situp", "somersault", "stand"]
-        class_labels = {i: classes[i] for i in range(len(classes))}
+        vid, cls = self.data[index]
+        with open(vid, 'rb') as f:
+            enc_vid = f.read()
 
-        pred_idx = [i + j for i in [0, 1, 2, 3] for j in [0, 1000, 2000, 3000, 4000]]
-        pred_idx.sort()
-        for k in pred_idx:
-            sample = self.data.__getitem__(k)
-            frames = sample[0].permute(3, 0, 1, 2).unsqueeze(0)
+        df, w, h, _ = lintel.loadvid(enc_vid, should_random_seek=self.random, num_frames=self.length*2)
+        df = np.frombuffer(df, dtype=np.uint8)
 
-            """
-            net.eval()
-            with torch.no_grad():
-                predclass = torch.argmax(net(frames).squeeze())
-                print((f"sample: {k} | "
-                       f"predicted class label: {predclass} | "
-                    f"sample class label: {sample[2]} ({class_labels[sample[2]]})"))
-                    
-            """
+        w=w//2
+        h=h//2
+        print(f"w {w} | h {h} | df\n{df}")
+        
+        # center crop
+        if not self.random:
+            i = int(round((h-self.size)/2.))
+            j = int(round((w-self.size)/2.))
+            df = np.reshape(df, newshape=(self.length*2, h*2, w*2, 3))[::2,::2,::2,:][:, i:-i, j:-j, :]
+        else:
+            th = self.size
+            tw = self.size
+            i = random.randint(0, h - th) if h!=th else 0
+            j = random.randint(0, w - tw) if w!=tw else 0
+            print(f"h: {h} | w: {w}")
+            print(f"th: {th} | tw: {tw}")
+            print(f"i: {i} | j: {j}")
+            df = np.reshape(df, newshape=(self.length*2, h*2, w*2, 3))[::2,::2,::2,:][:, i:i+th, j:j+tw, :]
+            
+        if self.mode == 'flow':
+            #print(df[:,:,:,1:].mean())
+            #exit()
+            # only take the 2 channels corresponding to flow (x,y)
+            df = df[:,:,:,1:]
+            if self.model == '2d':
+                # this should be redone...
+                # stack 10 along channel axis
+                df = np.asarray([df[:10],df[2:12],df[4:14]]) # gives 3x10xHxWx2
+                df = df.transpose(0,1,4,2,3).reshape(3,20,self.size,self.size).transpose(0,2,3,1)
+            
+        print(f"w {w} | h {h} | df\n{df}")        
+        df = 1-2*(df.astype(np.float32)/255)
 
-        print(data)
-        frames = data.__getitem__(0)[0]
-        print(data.__getitem__(0))
-        frames_ = frames.permute(3, 0, 1, 2).unsqueeze(0)
-        print(frames.shape)
-        print(frames_.shape)
-        return frames_
+        if self.model == '2d':
+            # 2d -> return TxCxHxW
+            return df.transpose([0,3,1,2]), cls
+        # 3d -> return CxTxHxW
+        return df.transpose([3,0,1,2]), cls
+
 
     def __len__(self):
         return len(self.data)
@@ -79,8 +98,8 @@ class HMDB(data_utl.Dataset):
 
 if __name__ == '__main__':
     DS = HMDB
-    dataseta = DS('data/hmdb/split0_train.txt', '/ssd/hmdb/', model='2d', mode='flow', length=16)
-    dataset = DS('data/hmdb/split0_test.txt', '/ssd/hmdb/', model='2d', mode='rgb', length=16, c2i=dataseta.class_to_id)
+    dataseta = DS('data/hmdb/split0_train.txt', './ssd/hmdb/', model='2d', mode='flow', length=16)
+    dataset = DS('data/hmdb/split0_test.txt', './ssd/hmdb/', model='2d', mode='rgb', length=16, c2i=dataseta.class_to_id)
 
     for i in range(len(dataseta)):
         print(dataseta[i][0].shape)
