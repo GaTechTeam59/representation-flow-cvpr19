@@ -222,8 +222,10 @@ for epoch in range(num_epochs):
         i = 0
         with torch.set_grad_enabled(train):
 
-
-            for vid, cls in dataloader[phase]:
+            # adding "_" args.system == "hmdb_subset because it torchvision
+            # utility returns (video, audio, class label) and there's no audio
+            # associated with the HMDB files
+            for vid, _, cls in dataloader[phase]:
                 print("iteration", i)
                 i = i + 1
 

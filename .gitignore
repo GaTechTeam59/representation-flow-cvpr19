@@ -4,7 +4,7 @@
 logs/
 tmp/
 hmdb51_org_unzipped
-hmbd51_org_subset
+hmbd51_org_subset/*
 *.DS_STORE
-hmdb-fof-model
+hmdb-fof-model/*
 ssd/
