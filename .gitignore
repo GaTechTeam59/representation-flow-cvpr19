@@ -3,10 +3,8 @@
 *#
 logs/
 tmp/
-hmdb51_org
 hmdb51_org_unzipped
-hmdb51_sta
-hmdb51_sta_unzipped
-hmdb51_org_subset
+hmbd51_org_subset/*
 *.DS_STORE
-hmdb-fof-model
+hmdb-fof-model/*
+ssd/

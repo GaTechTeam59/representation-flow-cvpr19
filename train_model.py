@@ -42,24 +42,28 @@ device = torch.device('cpu')
 #--model_depth 18 --n_pretrain_classes 700
 #model = testmodel_resent.generate_resent18(pretrained=False, mode=args.mode, n_iter=args.niter, learnable=eval(args.learnable), num_classes=400)
 
+torch.distributed.init_process_group(
+    backend='BACKEND',
+    init_method='env://'
+)
 
-model = testmodel_resnet.generate_resent18(
-                                           n_classes= 700
-                                           )
+model = testmodel_resnet.generate_resent18\
+                        (
+                           n_classes= 700
+                        )
 
-model = nn.DataParallel(model).to(device)
+model = torch.nn.parallel.DistributedDataParallel(model).to(device)
 batch_size = args.batch_size
 
 
 if args.system == 'hmdb':
     from hmdb_dataset import HMDB as DS
-    dataseta = DS('data/hmdb/split0_train.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length)
+    dataseta = DS('data/hmdb/split0_train.txt', './ssd/hmdb/')
     dl = torch.utils.data.DataLoader(dataseta, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     
     dataset = DS('data/hmdb/split0_test.txt', './ssd/hmdb/', model=args.model, mode=args.mode, length=args.length, c2i=dataseta.class_to_id)
     vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     dataloader = {'train':dl, 'val':vdl}
-
 
 if args.system == 'minikinetics':
     train = 'data/kinetics/minikinetics_train.json'
@@ -85,6 +89,53 @@ if args.system == 'kinetics':
     vdl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     dataloader = {'train':dl, 'val':vdl}
 
+if args.system == "hmdb_subset":
+    from torch_hmdb_helper import get_hmdb_data
+    length = 30
+    size = 112
+    root = "./hmdb51_org_subset"
+    annotation_path = "./data/hmdb/train_test_splits_subset"
+    frames_per_clip = length*1
+    step_between_clips = 1
+    fold = 1
+
+    # train set
+    dataseta = get_hmdb_data(
+        size=size,
+        root=root,
+        annotation_path=annotation_path,
+        frames_per_clip=frames_per_clip,
+        step_between_clips=step_between_clips,
+        fold=fold,
+        train=True
+    )
+    dl = torch.utils.data.DataLoader(
+        dataseta,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True
+    )
+
+    # validation / test set
+    dataset = get_hmdb_data(
+        size=size,
+        root=root,
+        annotation_path=annotation_path,
+        frames_per_clip=frames_per_clip,
+        step_between_clips=step_between_clips,
+        fold=fold,
+        train=False
+    )
+    vdl = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True
+    )
+
+    dataloader = {'train':dl, 'val':vdl}
 
 # scale lr for flow layer
 params = model.parameters()
@@ -171,8 +222,10 @@ for epoch in range(num_epochs):
         i = 0
         with torch.set_grad_enabled(train):
 
-
-            for vid, cls in dataloader[phase]:
+            # adding "_" args.system == "hmdb_subset because it torchvision
+            # utility returns (video, audio, class label) and there's no audio
+            # associated with the HMDB files
+            for vid, _, cls in dataloader[phase]:
                 print("iteration", i)
                 i = i + 1
 
