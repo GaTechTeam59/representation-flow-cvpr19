@@ -17,6 +17,7 @@ from torch.optim import lr_scheduler
 import flow_2p1d_resnets
 import testmodel
 import testmodel_resnet
+import numpy as np
 
 # device = torch.device('cuda')
 
@@ -158,7 +159,7 @@ class Model:
                     model.eval()
 
                 num_classes = 10 # REF TODO: this is hard-coded; is there a way to derive this?
-                cm = np.zeros((num_classes, num_classes)).to(self.device)  # REF
+                cm = torch.zeros(num_classes+1, num_classes+1).to(self.device)  # REF  the "+1" is for "other"
                 tloss = 0.
                 acc = 0.
                 tot = 0
@@ -175,13 +176,17 @@ class Model:
                         vid = vid.to(self.device)
                         cls = cls.to(self.device)
 
+                        vid = vid.permute(0, 4, 1, 2, 3)
                         outputs = model(vid)
 
                         pred = torch.max(outputs, dim=1)[1]
                         corr = torch.sum((pred == cls).int())
 
+                        print('pred', pred[:20])
+                        print('cls', cls[:20])
                         for i, j in zip(pred, cls):  # REF
-                            cm[i, j] += 1
+                           cm[j, j] += 1  # TODO: intentionally buggy... 
+                           # ... should be "cm[i, j]" when we can map pred to same class indices as cls
                         acc += corr.item()
                         tot += vid.size(0)
                         loss = F.cross_entropy(outputs, cls)
@@ -203,16 +208,16 @@ class Model:
                     log['train_acc'].append(acc/tot)
                     print('train loss',tloss/c, 'acc', acc/tot)
                     print("Confusion matrix")  # REF
-                    print(f"{cm:.4f}")  # REF
-                    print(f"train_acc: {np.trace(cm)/cm.sum():.4f}")
+                    print(f"{np.array(cm):.4f}")  # REF
+                    print(f"train_acc: {torch.trace(cm)/cm.sum():.4f}")
                 else:
                     log['validation'].append(tloss/c)
                     log['val_acc'].append(acc/tot)
                     print('val loss', tloss/c, 'acc', acc/tot)
                     lr_sched.step(tloss/c)
                     print("Confusion matrix")  # REF
-                    print(f"{cm:.4f}")  # REF
-                    print(f"train_acc: {np.trace(cm)/cm.sum():.4f}")
+                    print(f"{np.array(cm):.4f}")  # REF
+                    print(f"train_acc: {torch.trace(cm)/cm.sum():.4f}")
 
         return cm
             #with open(os.path.join(log_path,'log.json'), 'w') as out:
