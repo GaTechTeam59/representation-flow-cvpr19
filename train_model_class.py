@@ -31,11 +31,6 @@ import numpy as np
 class Model:
     def __init__(self, device, args):
         self.device = device
-        if args.resnet == 18:
-            #self.model = flow_2p1d_resnets.resnet18(pretrained=False, mode=args.mode, n_iter=args.niter,
-            #                               learnable=eval(args.learnable), num_classes=400)
-            self.model = flow_2p1d_resnets.resnet18(pretrained=args.pretrained, pretrained_model=args.pretrained_model, n_iter=args.niter,
-                                           learnable=eval(args.learnable), num_classes=400)
         if args.resnet == 34:
             #self.model = flow_2p1d_resnets.resnet34(pretrained=False, mode=args.mode, n_iter=args.niter,
             #                               learnable=eval(args.learnable), num_classes=400)
@@ -45,8 +40,9 @@ class Model:
                                                     learnable=eval(args.learnable), 
                                                     num_classes=51)
 
-        # if args.resnet == <something else>:
-        #     self.model = test_model.ResNet(...)
+        if args.resnet == 18:
+            self.model = testmodel_resnet.generate_resent18()   # NOTE: spelling
+        
         self.args = args
 
     def train(self):
@@ -182,8 +178,8 @@ class Model:
                         pred = torch.max(outputs, dim=1)[1]
                         corr = torch.sum((pred == cls).int())
 
-                        print('pred', pred[:20])
-                        print('cls', cls[:20])
+                        print('pred:', pred)
+                        print(' cls:', cls)
                         for i, j in zip(pred, cls):  # REF
                            cm[j, j] += 1  # TODO: intentionally buggy... 
                            # ... should be "cm[i, j]" when we can map pred to same class indices as cls
@@ -208,16 +204,16 @@ class Model:
                     log['train_acc'].append(acc/tot)
                     print('train loss',tloss/c, 'acc', acc/tot)
                     print("Confusion matrix")  # REF
-                    print(f"{np.array(cm):.4f}")  # REF
-                    print(f"train_acc: {torch.trace(cm)/cm.sum():.4f}")
+                    print(np.array(cm))  # REF
+                    print(f"train_acc: {torch.trace(cm)/torch.sum(cm):.4f}") # REF
                 else:
                     log['validation'].append(tloss/c)
                     log['val_acc'].append(acc/tot)
                     print('val loss', tloss/c, 'acc', acc/tot)
                     lr_sched.step(tloss/c)
                     print("Confusion matrix")  # REF
-                    print(f"{np.array(cm):.4f}")  # REF
-                    print(f"train_acc: {torch.trace(cm)/cm.sum():.4f}")
+                    print(np.array(cm))  # REF
+                    print(f"train_acc: {torch.trace(cm)/torch.sum(cm):.4f}") # REF
 
         return cm
             #with open(os.path.join(log_path,'log.json'), 'w') as out:

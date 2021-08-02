@@ -49,6 +49,12 @@ if __name__ == '__main__':
     
     noise_types = [] # ['fire', 'fog', 'grunge', 'lights', 'rain', 'snow']
 
+    # with custom resnet18
+    args = Args()
+    model = Model(device, args)
+    
+    model.train()
+    
     # base, noiseless
     args = Args(resnet=34, pretrained=True, pretrained_model=model_weights)
 
